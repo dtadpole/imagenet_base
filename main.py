@@ -302,8 +302,8 @@ def train(train_loader, model, criterion, optimizer, epoch, device, args):
     batch_time = AverageMeter('Time', ':4.2f')
     data_time = AverageMeter('Data', ':4.2f')
     losses = AverageMeter('Loss', ':.2e')
-    top1 = AverageMeter('Acc@1', ':4.2f')
-    top5 = AverageMeter('Acc@5', ':4.2f')
+    top1 = AverageMeter('Acc@1', ':6.2f')
+    top5 = AverageMeter('Acc@5', ':6.2f')
     progress = ProgressMeter(
         len(train_loader),
         [batch_time, data_time, losses, top1, top5],
