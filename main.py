@@ -18,7 +18,7 @@ import torch.utils.data.distributed
 import torchvision.datasets as datasets
 import torchvision.models as models
 import torchvision.transforms as transforms
-from torch.optim.lr_scheduler import StepLR
+from torch.optim.lr_scheduler import StepLR, ExponentialLR
 from torch.utils.data import Subset
 
 model_names = sorted(name for name in models.__dict__
@@ -35,7 +35,7 @@ parser.add_argument('-a', '--arch', metavar='ARCH', default='resnet18',
                         ' (default: resnet18)')
 parser.add_argument('-j', '--workers', default=12, type=int, metavar='N',
                     help='number of data loading workers (default: 12)')
-parser.add_argument('--epochs', default=30, type=int, metavar='N',
+parser.add_argument('--epochs', default=50, type=int, metavar='N',
                     help='number of total epochs to run')
 parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
                     help='manual epoch number (useful on restarts)')
@@ -212,8 +212,10 @@ def main_worker(gpu, ngpus_per_node, args):
         raise Exception("unknown optimizer: ${args.optimizer}")
 
 
-    """Sets the learning rate to the initial LR decayed by 10 every 10 epochs"""
-    scheduler = StepLR(optimizer, step_size=10, gamma=0.1)
+    # """Sets the learning rate to the initial LR decayed by 10 every 10 epochs"""
+    # scheduler = StepLR(optimizer, step_size=10, gamma=0.1)
+    """Sets the learning rate to the initial LR decayed by 0.9 each epoch"""
+    scheduler = ExponentialLR(optimizer, gamma=0.9)
 
     # optionally resume from a checkpoint
     if args.resume:
