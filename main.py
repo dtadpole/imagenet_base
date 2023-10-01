@@ -299,8 +299,8 @@ def main_worker(gpu, ngpus_per_node, args):
 
 
 def train(train_loader, model, criterion, optimizer, epoch, device, args):
-    batch_time = AverageMeter('Time', ':6.2f')
-    data_time = AverageMeter('Data', ':6.2f')
+    batch_time = AverageMeter('Time', ':5.2f')
+    data_time = AverageMeter('Data', ':5.2f')
     losses = AverageMeter('Loss', ':.3e')
     top1 = AverageMeter('Acc@1', ':6.2f')
     top5 = AverageMeter('Acc@5', ':6.2f')
