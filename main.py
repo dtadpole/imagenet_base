@@ -320,7 +320,7 @@ def main_worker(gpu, ngpus_per_node, args):
                 'best_acc1': best_acc1,
                 'optimizer' : optimizer.state_dict(),
                 'scheduler' : scheduler.state_dict()
-            }, is_best, filename=f'{args.arch}.model')
+            }, is_best, filename=f'{args.arch}.{args.optimizer}.{args.scheduler}.model')
 
 
 def train(train_loader, model, criterion, optimizer, epoch, device, args):
