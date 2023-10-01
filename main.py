@@ -57,8 +57,8 @@ parser.add_argument('--beta2', default=0.999, type=float, metavar='B2',
 parser.add_argument('--wd', '--weight-decay', default=1e-4, type=float,
                     metavar='W', help='weight decay (default: 1e-4)',
                     dest='weight_decay')
-parser.add_argument('-p', '--print-freq', default=10, type=int,
-                    metavar='N', help='print frequency (default: 10)')
+parser.add_argument('-p', '--print-freq', default=20, type=int,
+                    metavar='N', help='print frequency (default: 20)')
 parser.add_argument('--resume', default='', type=str, metavar='PATH',
                     help='path to latest checkpoint (default: none)')
 parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
@@ -312,7 +312,7 @@ def main_worker(gpu, ngpus_per_node, args):
                 'best_acc1': best_acc1,
                 'optimizer' : optimizer.state_dict(),
                 'scheduler' : scheduler.state_dict()
-            }, is_best)
+            }, is_best, filename=f'{args.arch}.model')
 
 
 def train(train_loader, model, criterion, optimizer, epoch, device, args):
@@ -357,7 +357,7 @@ def train(train_loader, model, criterion, optimizer, epoch, device, args):
         batch_time.update(time.time() - end)
         end = time.time()
 
-        if i % args.print_freq == 0:
+        if (i+1) % args.print_freq == 0:
             progress.display(i + 1)
 
 
@@ -390,7 +390,7 @@ def validate(val_loader, model, criterion, args):
                 batch_time.update(time.time() - end)
                 end = time.time()
 
-                if i % args.print_freq == 0:
+                if (i+1) % args.print_freq == 0:
                     progress.display(i + 1)
 
     batch_time = AverageMeter('Time', ':6.3f', Summary.NONE)
@@ -423,10 +423,10 @@ def validate(val_loader, model, criterion, args):
     return top1.avg
 
 
-def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
+def save_checkpoint(state, is_best, filename='checkpoint.pth'):
     torch.save(state, filename)
     if is_best:
-        shutil.copyfile(filename, 'model_best.pth.tar')
+        shutil.copyfile(filename, f'{filename}.best')
 
 class Summary(Enum):
     NONE = 0
