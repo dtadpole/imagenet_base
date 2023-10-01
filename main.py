@@ -46,6 +46,10 @@ parser.add_argument('-b', '--batch-size', default=256, type=int,
                          'using Data Parallel or Distributed Data Parallel')
 parser.add_argument('--lr', '--learning-rate', default=0.001, type=float,
                     metavar='LR', help='initial learning rate', dest='lr')
+parser.add_argument('--optimizer', default='SGD', type=str, metavar='OPT',
+                    help='optimizer [SGD|AdamW]')
+parser.add_argument('--momentum', default=0.9, type=float, metavar='M',
+                    help='momentum')
 parser.add_argument('--beta1', default=0.9, type=float, metavar='B1',
                     help='beta1')
 parser.add_argument('--beta2', default=0.999, type=float, metavar='B2',
@@ -193,12 +197,20 @@ def main_worker(gpu, ngpus_per_node, args):
     # define loss function (criterion), optimizer, and learning rate scheduler
     criterion = nn.CrossEntropyLoss().to(device)
 
-    # optimizer = torch.optim.SGD(model.parameters(), args.lr,
-    #                             momentum=args.momentum,
-    #                             weight_decay=args.weight_decay)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr,
-                                  betas=(args.beta1, args.beta2),
-                                  weight_decay=args.weight_decay)
+    if args.optimizer == 'SGD':
+        optimizer = torch.optim.SGD(model.parameters(), args.lr,
+                                    momentum=args.momentum,
+                                    weight_decay=args.weight_decay)
+    elif args.optimizer == 'Adam':
+        optimizer = torch.optim.ADAM(model.parameters(), lr=args.lr,
+                                      betas=(args.beta1, args.beta2),
+                                      weight_decay=args.weight_decay)
+    elif args.optimizer == 'AdamW':
+        optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr,
+                                      betas=(args.beta1, args.beta2),
+                                      weight_decay=args.weight_decay)
+    else:
+        raise Exception("unknown optimizer: ${args.optimizer}")
 
 
     """Sets the learning rate to the initial LR decayed by 10 every 30 epochs"""
