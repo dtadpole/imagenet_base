@@ -50,8 +50,8 @@ parser.add_argument('--beta1', default=0.9, type=float, metavar='B1',
                     help='beta1')
 parser.add_argument('--beta2', default=0.999, type=float, metavar='B2',
                     help='beta2')
-parser.add_argument('--wd', '--weight-decay', default=1e-3, type=float,
-                    metavar='W', help='weight decay (default: 1e-3)',
+parser.add_argument('--wd', '--weight-decay', default=1e-2, type=float,
+                    metavar='W', help='weight decay (default: 1e-2)',
                     dest='weight_decay')
 parser.add_argument('-p', '--print-freq', default=10, type=int,
                     metavar='N', help='print frequency (default: 10)')
