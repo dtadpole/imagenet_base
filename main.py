@@ -212,7 +212,7 @@ def main_worker(gpu, ngpus_per_node, args):
         raise Exception("unknown optimizer: ${args.optimizer}")
 
 
-    """Sets the learning rate to the initial LR decayed by 10 every 30 epochs"""
+    """Sets the learning rate to the initial LR decayed by 10 every 10 epochs"""
     scheduler = StepLR(optimizer, step_size=10, gamma=0.1)
 
     # optionally resume from a checkpoint
