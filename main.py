@@ -57,6 +57,8 @@ parser.add_argument('--beta2', default=0.999, type=float, metavar='B2',
 parser.add_argument('--wd', '--weight-decay', default=1e-4, type=float,
                     metavar='W', help='weight decay (default: 1e-4)',
                     dest='weight_decay')
+parser.add_argument('--scheduler', default='exp', type=str,
+                    metavar='N', help='scheduler [exp|step]')
 parser.add_argument('-p', '--print-freq', default=50, type=int,
                     metavar='N', help='print frequency (default: 50)')
 parser.add_argument('--resume', default='', type=str, metavar='PATH',
@@ -212,10 +214,14 @@ def main_worker(gpu, ngpus_per_node, args):
         raise Exception("unknown optimizer: ${args.optimizer}")
 
 
-    # """Sets the learning rate to the initial LR decayed by 10 every 10 epochs"""
-    # scheduler = StepLR(optimizer, step_size=10, gamma=0.1)
-    """Sets the learning rate to the initial LR decayed by 0.9 each epoch"""
-    scheduler = ExponentialLR(optimizer, gamma=0.9)
+    if args.scheduler == 'step':
+        """Sets the learning rate to the initial LR decayed by 10 every 10 epochs"""
+        scheduler = StepLR(optimizer, step_size=10, gamma=0.1)
+    elif args.scheduler == 'exp':
+        """Sets the learning rate to the initial LR decayed by 0.9 each epoch"""
+        scheduler = ExponentialLR(optimizer, gamma=0.9)
+    else:
+        raise Exception("unknown scheduler: ${args.scheduler}")
 
     # optionally resume from a checkpoint
     if args.resume:
