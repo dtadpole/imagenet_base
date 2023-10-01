@@ -203,8 +203,7 @@ def main_worker(gpu, ngpus_per_node, args):
                                     weight_decay=args.weight_decay)
     elif args.optimizer == 'Adam':
         optimizer = torch.optim.ADAM(model.parameters(), lr=args.lr,
-                                      betas=(args.beta1, args.beta2),
-                                      weight_decay=args.weight_decay)
+                                      betas=(args.beta1, args.beta2))
     elif args.optimizer == 'AdamW':
         optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr,
                                       betas=(args.beta1, args.beta2),
