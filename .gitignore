@@ -162,3 +162,5 @@ cython_debug/
 *.tar
 train/*
 val/*
+*.model
+*.model.best
