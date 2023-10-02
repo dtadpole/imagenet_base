@@ -30,9 +30,7 @@ parser.add_argument('data', metavar='DIR', nargs='?', default='.',
                     help='path to dataset (default: .)')
 parser.add_argument('-a', '--arch', metavar='ARCH', default='resnet18',
                     choices=model_names,
-                    help='model architecture: ' +
-                        ' | '.join(model_names) +
-                        ' (default: resnet18)')
+                    help='model architecture: (default: resnet18)')
 parser.add_argument('-j', '--workers', default=12, type=int, metavar='N',
                     help='number of data loading workers (default: 12)')
 parser.add_argument('--epochs', default=50, type=int, metavar='N',
