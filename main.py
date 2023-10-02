@@ -59,8 +59,8 @@ parser.add_argument('--wd', '--weight-decay', default=1e-4, type=float,
                     dest='weight_decay')
 parser.add_argument('--scheduler', default='exp', type=str,
                     metavar='N', help='scheduler [exp|step]')
-parser.add_argument('-p', '--print-freq', default=50, type=int,
-                    metavar='N', help='print frequency (default: 50)')
+parser.add_argument('-p', '--print-freq', default=100, type=int,
+                    metavar='N', help='print frequency (default: 100)')
 parser.add_argument('--resume', default='', type=str, metavar='PATH',
                     help='path to latest checkpoint (default: none)')
 parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
