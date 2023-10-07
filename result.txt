@@ -1,0 +1,3 @@
+maxvit_t.SGD.step
+     *   Acc@1 69.748 Acc@5 89.588
+     

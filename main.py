@@ -3,6 +3,7 @@ import os
 import random
 import shutil
 import time
+import math
 import warnings
 from enum import Enum
 
@@ -18,7 +19,7 @@ import torch.utils.data.distributed
 import torchvision.datasets as datasets
 import torchvision.models as models
 import torchvision.transforms as transforms
-from torch.optim.lr_scheduler import StepLR, ExponentialLR
+from torch.optim.lr_scheduler import StepLR, ExponentialLR, LinearLR, ChainedScheduler, CosineAnnealingLR
 from torch.utils.data import Subset
 
 model_names = sorted(name for name in models.__dict__
@@ -42,7 +43,7 @@ parser.add_argument('-b', '--batch-size', default=256, type=int,
                     help='mini-batch size (default: 256), this is the total '
                          'batch size of all GPUs on the current node when '
                          'using Data Parallel or Distributed Data Parallel')
-parser.add_argument('--lr', '--learning-rate', default=0.01, type=float,
+parser.add_argument('--lr', '--learning-rate', default=3e-3, type=float,
                     metavar='LR', help='initial learning rate', dest='lr')
 parser.add_argument('--optimizer', default='SGD', type=str, metavar='OPT',
                     help='optimizer [SGD|AdamW]')
@@ -54,11 +55,13 @@ parser.add_argument('--beta2', default=0.999, type=float, metavar='B2',
                     help='beta2')
 parser.add_argument('--gamma', default=0.9, type=float, metavar='GAMMA',
                     help='gamma')
-parser.add_argument('--wd', '--weight-decay', default=1e-4, type=float,
-                    metavar='W', help='weight decay (default: 1e-4)',
+parser.add_argument('--wd', '--weight-decay', default=3e-5, type=float,
+                    metavar='W', help='weight decay (default: 3e-5)',
                     dest='weight_decay')
-parser.add_argument('--scheduler', default='step', type=str,
-                    metavar='N', help='scheduler [step|exp]')
+parser.add_argument('--scheduler', default='cosine', type=str,
+                    metavar='N', help='scheduler [step|exp|cosine]')
+parser.add_argument('--use-amp', default=True, type=bool,
+                    metavar='AMP', help='use amp')
 parser.add_argument('-p', '--print-freq', default=100, type=int,
                     metavar='N', help='print frequency (default: 100)')
 parser.add_argument('--resume', default='', type=str, metavar='PATH',
@@ -131,6 +134,50 @@ def main():
 def main_worker(gpu, ngpus_per_node, args):
     global best_acc1
     args.gpu = gpu
+
+    # Data loading code
+    if args.dummy:
+        print("=> Dummy data is used!")
+        train_dataset = datasets.FakeData(1281167, (3, 224, 224), 1000, transforms.ToTensor())
+        val_dataset = datasets.FakeData(50000, (3, 224, 224), 1000, transforms.ToTensor())
+    else:
+        traindir = os.path.join(args.data, 'train')
+        valdir = os.path.join(args.data, 'val')
+        normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                     std=[0.229, 0.224, 0.225])
+
+        train_dataset = datasets.ImageFolder(
+            traindir,
+            transforms.Compose([
+                transforms.RandomResizedCrop(224),
+                transforms.RandomHorizontalFlip(),
+                transforms.ToTensor(),
+                normalize,
+            ]))
+
+        val_dataset = datasets.ImageFolder(
+            valdir,
+            transforms.Compose([
+                transforms.Resize(256),
+                transforms.CenterCrop(224),
+                transforms.ToTensor(),
+                normalize,
+            ]))
+
+    if args.distributed:
+        train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
+        val_sampler = torch.utils.data.distributed.DistributedSampler(val_dataset, shuffle=False, drop_last=True)
+    else:
+        train_sampler = None
+        val_sampler = None
+
+    train_loader = torch.utils.data.DataLoader(
+        train_dataset, batch_size=args.batch_size, shuffle=(train_sampler is None),
+        num_workers=args.workers, pin_memory=True, sampler=train_sampler)
+
+    val_loader = torch.utils.data.DataLoader(
+        val_dataset, batch_size=args.batch_size, shuffle=False,
+        num_workers=args.workers, pin_memory=True, sampler=val_sampler)
 
     if args.gpu is not None:
         print("Use GPU: {} for training".format(args.gpu))
@@ -213,15 +260,28 @@ def main_worker(gpu, ngpus_per_node, args):
     else:
         raise Exception("unknown optimizer: ${args.optimizer}")
 
+    # iters_per_epoch = math.floor(len(train_loader) / args.batch_size)
+    iters_per_epoch = len(train_loader)
+    print(f'iters_per_epoch: {iters_per_epoch}')
 
     if args.scheduler == 'step':
         """Sets the learning rate to the initial LR decayed by 0.9 every 2 epochs"""
-        scheduler = StepLR(optimizer, step_size=2, gamma=args.gamma)
+        main_scheduler = StepLR(optimizer, step_size=2*iters_per_epoch, gamma=args.gamma)
     elif args.scheduler == 'exp':
         """Sets the learning rate to the initial LR decayed by 0.9 each epoch"""
-        scheduler = ExponentialLR(optimizer, gamma=args.gamma)
+        main_scheduler = ExponentialLR(optimizer, gamma=args.gamma)
+    elif args.scheduler == 'cosine':
+        """Sets the learning rate to the initial LR decayed by 0.9 each epoch"""
+        main_scheduler = CosineAnnealingLR(optimizer, iters_per_epoch*args.epochs, eta_min=3e-6)
     else:
         raise Exception("unknown scheduler: ${args.scheduler}")
+
+    # warm up with one epoch data
+    warmup_scheduler = LinearLR(optimizer, start_factor=1e-4, end_factor=1.0, total_iters=math.floor(iters_per_epoch/2))
+    scheduler = ChainedScheduler([warmup_scheduler, main_scheduler])
+
+    # initialize scaler
+    scaler = torch.cuda.amp.GradScaler(enabled=args.use_amp)
 
     # optionally resume from a checkpoint
     if args.resume:
@@ -241,55 +301,15 @@ def main_worker(gpu, ngpus_per_node, args):
             model.load_state_dict(checkpoint['state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer'])
             scheduler.load_state_dict(checkpoint['scheduler'])
+            scaler.load_state_dict(checkpoint["scaler"])
             print("=> loaded checkpoint '{}' (epoch {})"
                   .format(args.resume, checkpoint['epoch']))
         else:
             print("=> no checkpoint found at '{}'".format(args.resume))
 
 
-    # Data loading code
-    if args.dummy:
-        print("=> Dummy data is used!")
-        train_dataset = datasets.FakeData(1281167, (3, 224, 224), 1000, transforms.ToTensor())
-        val_dataset = datasets.FakeData(50000, (3, 224, 224), 1000, transforms.ToTensor())
-    else:
-        traindir = os.path.join(args.data, 'train')
-        valdir = os.path.join(args.data, 'val')
-        normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                     std=[0.229, 0.224, 0.225])
-
-        train_dataset = datasets.ImageFolder(
-            traindir,
-            transforms.Compose([
-                transforms.RandomResizedCrop(224),
-                transforms.RandomHorizontalFlip(),
-                transforms.ToTensor(),
-                normalize,
-            ]))
-
-        val_dataset = datasets.ImageFolder(
-            valdir,
-            transforms.Compose([
-                transforms.Resize(256),
-                transforms.CenterCrop(224),
-                transforms.ToTensor(),
-                normalize,
-            ]))
-
-    if args.distributed:
-        train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
-        val_sampler = torch.utils.data.distributed.DistributedSampler(val_dataset, shuffle=False, drop_last=True)
-    else:
-        train_sampler = None
-        val_sampler = None
-
-    train_loader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=args.batch_size, shuffle=(train_sampler is None),
-        num_workers=args.workers, pin_memory=True, sampler=train_sampler)
-
-    val_loader = torch.utils.data.DataLoader(
-        val_dataset, batch_size=args.batch_size, shuffle=False,
-        num_workers=args.workers, pin_memory=True, sampler=val_sampler)
+    # compile model
+    model = torch.compile(model, mode="max-autotune")
 
     if args.evaluate:
         validate(val_loader, model, criterion, args)
@@ -300,12 +320,12 @@ def main_worker(gpu, ngpus_per_node, args):
             train_sampler.set_epoch(epoch)
 
         # train for one epoch
-        train(train_loader, model, criterion, optimizer, epoch, device, args)
+        train(train_loader, model, criterion, optimizer, scheduler, scaler, epoch, device, args)
 
         # evaluate on validation set
         acc1 = validate(val_loader, model, criterion, args)
 
-        scheduler.step()
+        # scheduler.step()
 
         # remember best acc@1 and save checkpoint
         is_best = acc1 > best_acc1
@@ -319,11 +339,12 @@ def main_worker(gpu, ngpus_per_node, args):
                 'state_dict': model.state_dict(),
                 'best_acc1': best_acc1,
                 'optimizer' : optimizer.state_dict(),
-                'scheduler' : scheduler.state_dict()
+                'scheduler' : scheduler.state_dict(),
+                'scaler': scaler.state_dict()
             }, is_best, filename=f'{args.arch}.{args.optimizer}.{args.scheduler}.model')
 
 
-def train(train_loader, model, criterion, optimizer, epoch, device, args):
+def train(train_loader, model, criterion, optimizer, scheduler, scaler, epoch, device, args):
     batch_time = AverageMeter('Time', ':4.2f')
     data_time = AverageMeter('Data', ':4.2f')
     losses = AverageMeter('Loss', ':.2e')
@@ -346,27 +367,32 @@ def train(train_loader, model, criterion, optimizer, epoch, device, args):
         images = images.to(device, non_blocking=True)
         target = target.to(device, non_blocking=True)
 
-        # compute output
-        output = model(images)
-        loss = criterion(output, target)
+        with torch.autocast(device_type='cuda' if torch.cuda.is_available() else 'cpu',
+                            dtype=torch.float16, enabled=args.use_amp):
+            # compute output
+            output = model(images)
+            loss = criterion(output, target)
 
         # measure accuracy and record loss
         acc1, acc5 = accuracy(output, target, topk=(1, 5))
         losses.update(loss.item(), images.size(0))
         top1.update(acc1[0], images.size(0))
         top5.update(acc5[0], images.size(0))
+        learning_rate = f"LR {','.join(['%.2e' % e for e in scheduler.get_last_lr()])}"
 
         # compute gradient and do SGD step
         optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+        scaler.scale(loss).backward()
+        scaler.step(optimizer)
+        scaler.update()
+        scheduler.step()
 
         # measure elapsed time
         batch_time.update(time.time() - end)
         end = time.time()
 
         if (i+1) % args.print_freq == 0:
-            progress.display(i + 1)
+            progress.display(i + 1, optional=learning_rate)
 
 
 def validate(val_loader, model, criterion, args):
@@ -500,10 +526,12 @@ class ProgressMeter(object):
         self.meters = meters
         self.prefix = prefix
 
-    def display(self, batch):
+    def display(self, batch, optional=None):
         entries = [self.prefix + self.batch_fmtstr.format(batch)]
         entries += [str(meter) for meter in self.meters]
-        print('\t'.join(entries))
+        if optional is not None:
+            entries.insert(0, optional)
+        print('  '.join(entries))
 
     def display_summary(self):
         entries = [" *"]
