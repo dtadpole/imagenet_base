@@ -530,7 +530,7 @@ class ProgressMeter(object):
         entries = [self.prefix + self.batch_fmtstr.format(batch)]
         entries += [str(meter) for meter in self.meters]
         if optional is not None:
-            entries.insert(0, optional)
+            entries.insert(3, optional)
         print('  '.join(entries))
 
     def display_summary(self):
