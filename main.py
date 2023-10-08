@@ -272,7 +272,7 @@ def main_worker(gpu, ngpus_per_node, args):
         main_scheduler = ExponentialLR(optimizer, gamma=args.gamma)
     elif args.scheduler == 'cosine':
         """Sets the learning rate to the initial LR decayed by 0.9 each epoch"""
-        main_scheduler = CosineAnnealingLR(optimizer, iters_per_epoch*args.epochs, eta_min=3e-6)
+        main_scheduler = CosineAnnealingLR(optimizer, iters_per_epoch*args.epochs, eta_min=3e-5)
     else:
         raise Exception("unknown scheduler: ${args.scheduler}")
 
