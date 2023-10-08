@@ -32,8 +32,8 @@ parser.add_argument('data', metavar='DIR', nargs='?', default='.',
 parser.add_argument('-a', '--arch', metavar='ARCH', default='resnet18',
                     choices=model_names,
                     help='model architecture: (default: resnet18)')
-parser.add_argument('-j', '--workers', default=5, type=int, metavar='N',
-                    help='number of data loading workers (default: 5)')
+parser.add_argument('-j', '--workers', default=6, type=int, metavar='N',
+                    help='number of data loading workers (default: 6)')
 parser.add_argument('--epochs', default=50, type=int, metavar='N',
                     help='number of total epochs to run')
 parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
@@ -184,11 +184,13 @@ def main_worker(gpu, ngpus_per_node, args):
 
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=args.batch_size, shuffle=(train_sampler is None),
-        num_workers=args.workers, pin_memory=True, sampler=train_sampler)
+        num_workers=args.workers, pin_memory=True, sampler=train_sampler,
+        prefetch_factor=8, persistent_workers=True)
 
     val_loader = torch.utils.data.DataLoader(
         val_dataset, batch_size=args.batch_size, shuffle=False,
-        num_workers=args.workers, pin_memory=True, sampler=val_sampler)
+        num_workers=args.workers, pin_memory=True, sampler=val_sampler,
+        prefetch_factor=8, persistent_workers=True)
 
     if args.gpu is not None:
         print("Use GPU: {} for training".format(args.gpu))
@@ -234,9 +236,12 @@ def main_worker(gpu, ngpus_per_node, args):
             model.features = torch.nn.DataParallel(model.features)
             model.cuda()
         else:
-            # model.cuda()
-            # model = torch.nn.parallel.DistributedDataParallel(model)
             model = torch.nn.DataParallel(model).cuda()
+
+    # compile model
+    if args.compile:
+        model = torch.compile(model, mode="max-autotune")
+        # model = torch.compile(model)
 
     if torch.cuda.is_available():
         if args.gpu:
@@ -310,12 +315,6 @@ def main_worker(gpu, ngpus_per_node, args):
                   .format(args.resume, checkpoint['epoch']))
         else:
             print("=> no checkpoint found at '{}'".format(args.resume))
-
-
-    # compile model
-    if args.compile:
-        model = torch.compile(model, mode="max-autotune")
-        # model = torch.compile(model)
 
     if args.evaluate:
         validate(val_loader, model, criterion, args)
