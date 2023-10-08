@@ -252,25 +252,8 @@ def main_worker(gpu, ngpus_per_node, args):
     else:
         raise Exception("unknown optimizer: ${args.optimizer}")
 
-    if args.distributed:
-        train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
-        val_sampler = torch.utils.data.distributed.DistributedSampler(val_dataset, shuffle=False, drop_last=True)
-    else:
-        train_sampler = None
-        val_sampler = None
-
-    train_loader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=args.batch_size, shuffle=(train_sampler is None),
-        num_workers=args.workers, pin_memory=True, sampler=train_sampler,
-        prefetch_factor=8, persistent_workers=True)
-
-    val_loader = torch.utils.data.DataLoader(
-        val_dataset, batch_size=args.batch_size, shuffle=False,
-        num_workers=args.workers, pin_memory=True, sampler=val_sampler,
-        prefetch_factor=8, persistent_workers=True)
-
     # iters_per_epoch = math.floor(len(train_loader) / args.batch_size)
-    iters_per_epoch = len(train_loader)
+    iters_per_epoch = math.floor(len(train_dataset) / args.batch_size)
     print(f'iters_per_epoch: {iters_per_epoch}')
 
     if args.scheduler == 'step':
@@ -288,6 +271,23 @@ def main_worker(gpu, ngpus_per_node, args):
     # warm up with one epoch data
     warmup_scheduler = LinearLR(optimizer, start_factor=1e-4, end_factor=1.0, total_iters=math.floor(iters_per_epoch/2))
     scheduler = ChainedScheduler([warmup_scheduler, main_scheduler])
+
+    if args.distributed:
+        train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
+        val_sampler = torch.utils.data.distributed.DistributedSampler(val_dataset, shuffle=False, drop_last=True)
+    else:
+        train_sampler = None
+        val_sampler = None
+
+    train_loader = torch.utils.data.DataLoader(
+        train_dataset, batch_size=args.batch_size, shuffle=(train_sampler is None),
+        num_workers=args.workers, pin_memory=True, sampler=train_sampler,
+        prefetch_factor=8, persistent_workers=True)
+
+    val_loader = torch.utils.data.DataLoader(
+        val_dataset, batch_size=args.batch_size, shuffle=False,
+        num_workers=args.workers, pin_memory=True, sampler=val_sampler,
+        prefetch_factor=8, persistent_workers=True)
 
     # initialize scaler
     scaler = torch.cuda.amp.GradScaler(enabled=args.use_amp)
