@@ -195,6 +195,18 @@ def main_worker(gpu, ngpus_per_node, args):
     if args.gpu is not None:
         print("Use GPU: {} for training".format(args.gpu))
 
+    if torch.cuda.is_available():
+        if args.gpu:
+            device = torch.device('cuda:{}'.format(args.gpu))
+        else:
+            device = torch.device("cuda")
+    elif torch.backends.mps.is_available():
+        device = torch.device("mps")
+    else:
+        device = torch.device("cpu")
+    # define loss function (criterion), optimizer, and learning rate scheduler
+    criterion = nn.CrossEntropyLoss().to(device)
+
     # create model
     if args.pretrained:
         print("=> using pre-trained model '{}'".format(args.arch))
@@ -242,18 +254,6 @@ def main_worker(gpu, ngpus_per_node, args):
     if args.compile:
         model = torch.compile(model, mode="max-autotune")
         # model = torch.compile(model)
-
-    if torch.cuda.is_available():
-        if args.gpu:
-            device = torch.device('cuda:{}'.format(args.gpu))
-        else:
-            device = torch.device("cuda")
-    elif torch.backends.mps.is_available():
-        device = torch.device("mps")
-    else:
-        device = torch.device("cpu")
-    # define loss function (criterion), optimizer, and learning rate scheduler
-    criterion = nn.CrossEntropyLoss().to(device)
 
     if args.optimizer == 'SGD':
         optimizer = torch.optim.SGD(model.parameters(), args.lr,
