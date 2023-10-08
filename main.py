@@ -62,6 +62,8 @@ parser.add_argument('--scheduler', default='cosine', type=str,
                     metavar='N', help='scheduler [step|exp|cosine]')
 parser.add_argument('--use-amp', default=True, type=bool,
                     metavar='AMP', help='use amp')
+parser.add_argument('--compile', default=False, type=bool, metavar='COMPILE',
+                    help='compile')
 parser.add_argument('-p', '--print-freq', default=100, type=int,
                     metavar='N', help='print frequency (default: 100)')
 parser.add_argument('--resume', default='', type=str, metavar='PATH',
@@ -309,7 +311,8 @@ def main_worker(gpu, ngpus_per_node, args):
 
 
     # compile model
-    model = torch.compile(model, mode="max-autotune")
+    if args.compile:
+        model = torch.compile(model, mode="max-autotune")
 
     if args.evaluate:
         validate(val_loader, model, criterion, args)
