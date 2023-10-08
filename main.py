@@ -32,8 +32,8 @@ parser.add_argument('data', metavar='DIR', nargs='?', default='.',
 parser.add_argument('-a', '--arch', metavar='ARCH', default='resnet18',
                     choices=model_names,
                     help='model architecture: (default: resnet18)')
-parser.add_argument('-j', '--workers', default=6, type=int, metavar='N',
-                    help='number of data loading workers (default: 6)')
+parser.add_argument('-j', '--workers', default=12, type=int, metavar='N',
+                    help='number of data loading workers (default: 12)')
 parser.add_argument('--epochs', default=50, type=int, metavar='N',
                     help='number of total epochs to run')
 parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
@@ -175,23 +175,6 @@ def main_worker(gpu, ngpus_per_node, args):
         dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
                                 world_size=args.world_size, rank=args.rank)
 
-    if args.distributed:
-        train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
-        val_sampler = torch.utils.data.distributed.DistributedSampler(val_dataset, shuffle=False, drop_last=True)
-    else:
-        train_sampler = None
-        val_sampler = None
-
-    train_loader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=args.batch_size, shuffle=(train_sampler is None),
-        num_workers=args.workers, pin_memory=True, sampler=train_sampler,
-        prefetch_factor=8, persistent_workers=True)
-
-    val_loader = torch.utils.data.DataLoader(
-        val_dataset, batch_size=args.batch_size, shuffle=False,
-        num_workers=args.workers, pin_memory=True, sampler=val_sampler,
-        prefetch_factor=8, persistent_workers=True)
-
     if args.gpu is not None:
         print("Use GPU: {} for training".format(args.gpu))
 
@@ -268,6 +251,23 @@ def main_worker(gpu, ngpus_per_node, args):
                                       weight_decay=args.weight_decay)
     else:
         raise Exception("unknown optimizer: ${args.optimizer}")
+
+    if args.distributed:
+        train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
+        val_sampler = torch.utils.data.distributed.DistributedSampler(val_dataset, shuffle=False, drop_last=True)
+    else:
+        train_sampler = None
+        val_sampler = None
+
+    train_loader = torch.utils.data.DataLoader(
+        train_dataset, batch_size=args.batch_size, shuffle=(train_sampler is None),
+        num_workers=args.workers, pin_memory=True, sampler=train_sampler,
+        prefetch_factor=8, persistent_workers=True)
+
+    val_loader = torch.utils.data.DataLoader(
+        val_dataset, batch_size=args.batch_size, shuffle=False,
+        num_workers=args.workers, pin_memory=True, sampler=val_sampler,
+        prefetch_factor=8, persistent_workers=True)
 
     # iters_per_epoch = math.floor(len(train_loader) / args.batch_size)
     iters_per_epoch = len(train_loader)
