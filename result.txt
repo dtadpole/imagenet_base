@@ -1,3 +1,2 @@
-maxvit_t.SGD.step
+maxvit_t.SGD.step [50 epochs]
      *   Acc@1 69.748 Acc@5 89.588
-     
