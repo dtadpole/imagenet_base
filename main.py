@@ -32,8 +32,8 @@ parser.add_argument('data', metavar='DIR', nargs='?', default='.',
 parser.add_argument('-a', '--arch', metavar='ARCH', default='resnet18',
                     choices=model_names,
                     help='model architecture: (default: resnet18)')
-parser.add_argument('-j', '--workers', default=12, type=int, metavar='N',
-                    help='number of data loading workers (default: 12)')
+parser.add_argument('-j', '--workers', default=8, type=int, metavar='N',
+                    help='number of data loading workers (default: 8)')
 parser.add_argument('--epochs', default=50, type=int, metavar='N',
                     help='number of total epochs to run')
 parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
@@ -314,8 +314,8 @@ def main_worker(gpu, ngpus_per_node, args):
 
     # compile model
     if args.compile:
-        # model = torch.compile(model, mode="max-autotune")
-        model = torch.compile(model)
+        model = torch.compile(model, mode="max-autotune")
+        # model = torch.compile(model)
 
     if args.evaluate:
         validate(val_loader, model, criterion, args)
